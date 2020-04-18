@@ -1,4 +1,100 @@
 const Trace = require('./trace');
+const { str, char, sequenceOf, choice, many, many1, letters, optionalWhitespace, coroutine, sepBy, between, possibly } = require("arcsecond");
+
+const code = `
+clock     : controlled
+A         : controlled 
+E         : controlled
+
+gated_clk : and(clock, E)
+
+not_d_in  : not(A)
+d_nand_a  : nand(A, gated_clk)
+q         : nand(d_nand_a, q_)
+d_nand_c  : nand(not_d_in, gated_clk)
+q_        : nand(d_nand_c, q)
+`
+
+const idParser = many1(choice([
+  letters,
+  str('_'),
+  str('.')
+])).map(x => x.join(''));
+
+const assignmentParser = sequenceOf([
+  optionalWhitespace,
+  str('='),
+  optionalWhitespace
+]);
+
+const opParser = choice([
+  str('nand'),
+  str('and'),
+  str('not'),
+  str('xnor'),
+  str('xorR'),
+  str('nor'),
+  str('or'),
+  str('controlled')
+])
+
+// const commaSeparated = sepBy(sequenceOf([optionalWhitespace, char(","), optionalWhitespace]));
+const twoCommaSeparatedValues = (valueParser) => sequenceOf([valueParser, optionalWhitespace, char(','), optionalWhitespace, valueParser]).map(x => [x[0],x[4]])
+const betweenBrackets = between(char("("))(char(")"));
+const bitParser = choice([char('0'), char('1')])
+
+const stateParser = coroutine(function* () {
+  yield assignmentParser;
+  const bit = yield bitParser;
+  return Number(bit);
+})
+
+const argsParser = (opStr) => {
+  switch (opStr) {
+    case 'nand':
+    case 'and':
+    case 'xnor':
+    case 'xor':
+    case 'nor':
+    case 'or':
+      return betweenBrackets(twoCommaSeparatedValues(idParser));
+    case 'not':
+      return betweenBrackets(idParser).map(x => [x]);
+    case 'controlled':
+      return optionalWhitespace.map(x=>[]);
+    default:
+      return fail('Unrecognized operator');
+  }
+}
+
+const lineParser = coroutine(function* () {
+
+  yield many(char('\n')); // skip any preceeding blank lines
+
+  const id = yield idParser;
+  yield sequenceOf([optionalWhitespace, char(':'), optionalWhitespace]);
+  
+  const op = yield opParser;
+  const inputs = yield argsParser(op);
+  const state = yield possibly(stateParser);
+
+  return {
+    id: id,
+    type: op,
+    inputs: inputs,
+    state: state == null ? 0 : Number(state)
+  }
+});
+
+const logicParser = many1(lineParser);
+
+const parsedLogic = logicParser.run(code);
+
+if (parsedLogic.isError) {
+  throw new Error(parsedLogic.error)
+}
+
+const components = parsedLogic.result;
 
 const indexBy = (array, prop) => array.reduce((output, item) => {
   output[item[prop]] = item;
@@ -13,76 +109,76 @@ const nor = (a, b) => not(a || b);
 const xor = (a, b) => a ^ b;
 const xnor = (a, b) => not(a ^ b);
 
-const createDFF = (name, clk, dIn) => {
-  return [
-    {
-      id: `${name}.not_d_in`,
-      type: 'not',
-      inputs: [dIn],
-      state: 0
-    },
-    {
-      id: `${name}.d_nand_a`,
-      type: 'nand',
-      inputs: [dIn, clk],
-      state: 0
-    },
-    {
-      id: `${name}.q`,
-      type: 'nand',
-      inputs: [`${name}.d_nand_a`, `${name}.q_`],
-      state: 0
-    },
-    {
-      id: `${name}.d_nand_c`,
-      type: 'nand',
-      inputs: [`${name}.not_d_in`, clk],
-      state: 0
-    },
-    {
-      id: `${name}.q_`,
-      type: 'nand',
-      inputs: [`${name}.d_nand_c`, `${name}.q`],
-      state: 0
-    },
-  ];
-}
+// const createDFF = (name, clk, dIn) => {
+//   return [
+//     {
+//       id: `${name}.not_d_in`,
+//       type: 'not',
+//       inputs: [dIn],
+//       state: 0
+//     },
+//     {
+//       id: `${name}.d_nand_a`,
+//       type: 'nand',
+//       inputs: [dIn, clk],
+//       state: 0
+//     },
+//     {
+//       id: `${name}.q`,
+//       type: 'nand',
+//       inputs: [`${name}.d_nand_a`, `${name}.q_`],
+//       state: 0
+//     },
+//     {
+//       id: `${name}.d_nand_c`,
+//       type: 'nand',
+//       inputs: [`${name}.not_d_in`, clk],
+//       state: 0
+//     },
+//     {
+//       id: `${name}.q_`,
+//       type: 'nand',
+//       inputs: [`${name}.d_nand_c`, `${name}.q`],
+//       state: 0
+//     },
+//   ];
+// }
 
-const createDFFE = (name, clk, dIn, dEnable) => {
-  const gatedClock = {
-    id: `${name}.clk`,
-    type: 'and',
-    inputs: [clk, dEnable],
-    state: 0
-  };
+// const createDFFE = (name, clk, dIn, dEnable) => {
+//   const gatedClock = {
+//     id: `${name}.clk`,
+//     type: 'and',
+//     inputs: [clk, dEnable],
+//     state: 0
+//   };
 
-  return [
-    gatedClock,
-    ...createDFF(name, gatedClock.id, dIn)
-  ];
-}
+//   return [
+//     gatedClock,
+//     ...createDFF(name, gatedClock.id, dIn)
+//   ];
+// }
 
-const components = [
-  {
-    id: 'clock',
-    type: 'controlled',
-    inputs: [],
-    state: 0,
-  },
-  {
-    id: 'A',
-    type: 'controlled',
-    inputs: [],
-    state: 0,
-  },
-  {
-    id: 'E',
-    type: 'controlled',
-    inputs: [],
-    state: 0,
-  },
-  ...createDFFE('DFF', 'clock', 'A', 'E')
-];
+// const components = [
+//   {
+//     id: 'clock',
+//     type: 'controlled',
+//     inputs: [],
+//     state: 0,
+//   },
+//   {
+//     id: 'A',
+//     type: 'controlled',
+//     inputs: [],
+//     state: 0,
+//   },
+//   {
+//     id: 'E',
+//     type: 'controlled',
+//     inputs: [],
+//     state: 0,
+//   },
+//   ...createDFFE('DFF', 'clock', 'A', 'E')
+// ];
 
 const componentLookup = indexBy(components, 'id');
 
@@ -147,5 +243,5 @@ trace.getTraces([
   'clock',
   'A',
   'E',
-  'DFF.q'
+  'q'
 ]).forEach(trace => console.log(trace));

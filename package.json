@@ -1,0 +1,23 @@
+{
+  "name": "digital-logic-simulator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "arcsecond": "^2.0.4"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dkilfoyle/Digital-Logic-Simulator.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dkilfoyle/Digital-Logic-Simulator/issues"
+  },
+  "homepage": "https://github.com/dkilfoyle/Digital-Logic-Simulator#readme"
+}
